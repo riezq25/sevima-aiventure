@@ -127,6 +127,61 @@ Aturan unggah:
   - Perubahan status **otomatis mengirim notifikasi WhatsApp** ke peserta via Fonnte.
 - **Unduh Kartu Peserta** — admin dapat mengunduh kartu peserta (PDF) milik pendaftar mana pun.
 
+### 3.4 Daftar Fitur (Feature List)
+
+Setiap fitur diberi **kode unik** untuk memudahkan pelacakan ke devplan & testing.
+
+#### Publik & Pendaftaran (`PUB`)
+| Kode | Fitur | Role | Fase | Prioritas |
+|---|---|---|---|---|
+| PUB-01 | Carousel informasi kampus | Guest | 1 | Sedang |
+| PUB-02 | Daftar & info program studi | Guest | 1 | Sedang |
+| PUB-03 | Daftar jadwal PMB | Guest | 1 | Tinggi |
+| PUB-04 | Detail jadwal PMB | Guest | 1 | Tinggi |
+| PUB-05 | Unduh brosur jadwal (PDF) | Guest | 1 | Tinggi |
+| PUB-06 | Form pendaftaran (data pendaftar) | Guest | 1 | Kritis |
+| PUB-07 | Jalur otomatis dari jadwal aktif | Guest | 1 | Kritis |
+| PUB-08 | Validasi NIK unik (1 NIK = 1 pendaftaran) | Guest | 1 | Kritis |
+| PUB-09 | Pembayaran Midtrans Snap | Guest/Peserta | 1 | Kritis |
+| PUB-10 | Notifikasi WA no. pendaftaran & password | Sistem | 3 | Kritis |
+
+#### Peserta (`PST`)
+| Kode | Fitur | Role | Fase | Prioritas |
+|---|---|---|---|---|
+| PST-01 | Login peserta (no. pendaftaran + password) | Peserta | 1 | Kritis |
+| PST-02 | Lihat status pendaftaran | Peserta | 1 | Tinggi |
+| PST-03 | Ubah data pendaftaran (sebelum dikunci) | Peserta | 1 | Tinggi |
+| PST-04 | Unggah dokumen pendukung (persyaratan dinamis) | Peserta | 1 | Kritis |
+| PST-05 | Lihat status & detail pembayaran | Peserta | 1 | Sedang |
+| PST-06 | Unduh kartu peserta (PDF) | Peserta | 1 | Tinggi |
+
+#### Admin (`ADM`)
+| Kode | Fitur | Role | Fase | Prioritas |
+|---|---|---|---|---|
+| ADM-01 | Dashboard grafik & summary pendaftar | Admin | 2 | Tinggi |
+| ADM-02 | Data pendaftar (filter, search, detail, ekspor) | Admin | 2 | Tinggi |
+| ADM-03 | Data pembayaran + detail | Admin | 2 | Tinggi |
+| ADM-04 | Validasi pembayaran manual | Admin | 2/3 | Kritis |
+| ADM-05 | Validasi pembayaran otomatis (webhook) | Sistem | 3 | Kritis |
+| ADM-06 | CRUD carousel | Admin | 2 | Sedang |
+| ADM-07 | CRUD program studi | Admin | 2 | Tinggi |
+| ADM-08 | CRUD jalur pendaftaran | Admin | 2 | Tinggi |
+| ADM-09 | Konfigurasi persyaratan dokumen dinamis per jalur | Admin | 2 | Tinggi |
+| ADM-10 | CRUD jadwal PMB (set aktif) | Admin | 2 | Tinggi |
+| ADM-11 | CRUD user (peserta & admin) | Admin | 2 | Tinggi |
+| ADM-12 | Kirim notifikasi WA manual | Admin | 3 | Tinggi |
+| ADM-13 | Ubah status / loloskan / tolak + WA otomatis | Admin | 2/3 | Kritis |
+| ADM-14 | Unduh kartu peserta per pendaftar | Admin | 2 | Tinggi |
+
+#### Integrasi & Sistem (`SYS`)
+| Kode | Fitur | Role | Fase | Prioritas |
+|---|---|---|---|---|
+| SYS-01 | Autentikasi Sanctum + otorisasi role | Sistem | 3 | Kritis |
+| SYS-02 | Integrasi Midtrans Snap (token + webhook) | Sistem | 3 | Kritis |
+| SYS-03 | Integrasi Fonnte (WA via queue + log) | Sistem | 3 | Kritis |
+| SYS-04 | Penyimpanan dokumen ke Supabase Storage | Sistem | 3 | Tinggi |
+| SYS-05 | Generate kartu peserta (PDF) | Sistem | 3 | Tinggi |
+
 ---
 
 ## 4. Model Data (Ringkasan)
