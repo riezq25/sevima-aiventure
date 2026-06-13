@@ -1,239 +1,121 @@
-# PRD — Sistem PMB Kampus (Penerimaan Mahasiswa Baru)
-
-| Field | Keterangan |
-|---|---|
-| Nama Produk | Sistem PMB Kampus |
-| Versi Dokumen | 1.0 |
-| Tanggal | 13 Juni 2026 |
-| Status | Draft |
+# PRD — Product Requirements Document
+## Prototype Sistem Penerimaan Mahasiswa Baru
+### Vibe Coding & Venture SEVIMA
 
 ---
 
-## 1. Ringkasan (Overview)
+## 1. Latar Belakang & Visi
 
-Sistem PMB (Penerimaan Mahasiswa Baru) adalah aplikasi web untuk mengelola seluruh proses pendaftaran calon mahasiswa baru, mulai dari menampilkan informasi kampus, proses pendaftaran online, pembayaran, unggah dokumen, hingga pengelolaan & validasi data oleh admin. Sistem juga terintegrasi dengan pembayaran (Midtrans Snap) dan notifikasi WhatsApp (Fonnte).
+Perguruan tinggi saat ini masih banyak mengelola proses PMB secara manual atau semi-digital — formulir fisik, pengumuman via papan pengumuman, dan koordinasi jadwal via WhatsApp. Ini menyebabkan informasi tidak sampai tepat waktu, data tidak terpusat, dan beban kerja panitia meningkat di setiap periode penerimaan.
 
-### 1.1 Tujuan
-- Mempermudah calon mahasiswa mendaftar secara online tanpa datang ke kampus.
-- Mendukung jalur pendaftaran gratis maupun berbayar.
-- Mengotomatiskan notifikasi (nomor pendaftaran, password, status kelulusan) via WhatsApp.
-- Memberikan dashboard pemantauan & validasi yang lengkap bagi admin.
+**Visi produk:**
+> Membangun prototype sistem PMB yang memungkinkan calon mahasiswa mendaftar, memantau status, dan mendapatkan informasi — serta memudahkan admin mengelola seluruh proses — dalam satu platform digital yang bersih dan mudah digunakan.
 
-### 1.2 Pengguna (User Roles)
-| Role | Deskripsi |
-|---|---|
-| Pengunjung (Guest) | Melihat landing page, jadwal PMB, dan melakukan pendaftaran. |
-| Peserta (Pendaftar) | Login untuk melihat status, mengubah data, dan mengunggah dokumen. |
-| Admin | Mengelola data master, validasi pembayaran, mengubah status pendaftaran, dan mengirim notifikasi. |
+**Tujuan prototype ini:**
+- Memvalidasi alur pendaftaran secara digital end-to-end
+- Menggantikan proses manual yang paling bermasalah terlebih dahulu
+- Menjadi dasar pengembangan sistem PMB yang lebih lengkap ke depannya
 
 ---
 
-## 2. Technology Stack
+## 2. User Personas
 
-| Layer | Teknologi |
-|---|---|
-| Backend (API) | Laravel (PHP) — REST API |
-| Frontend | React + shadcn/ui + Tailwind CSS |
-| Database | Supabase (PostgreSQL) |
-| Penyimpanan File | Supabase Storage (untuk dokumen pendukung) |
-| Pembayaran | Midtrans Snap |
-| Notifikasi WhatsApp | Fonnte API (`https://docs.fonnte.com/api-send-message/`) |
-| Autentikasi | Laravel Sanctum (token-based) |
+### 2.1 Calon Mahasiswa
+- **Siapa:** Siswa SMA/SMK/MA yang akan mendaftar ke perguruan tinggi
+- **Kebutuhan utama:** Bisa mendaftar online kapan saja, tahu status pendaftarannya, tidak perlu datang ke kampus hanya untuk mengumpulkan formulir
+- **Pain point saat ini:** Tidak tahu apakah berkas sudah diterima, jadwal tes sering berubah tanpa pemberitahuan resmi
 
-> Catatan: Frontend React mengonsumsi REST API dari backend Laravel. Database utama menggunakan Supabase (PostgreSQL) yang dikoneksikan ke Laravel.
+### 2.2 Admin PMB
+- **Siapa:** Staf panitia PMB yang mengelola data pendaftar dan proses seleksi
+- **Kebutuhan utama:** Lihat semua data pendaftar terpusat, ubah status seleksi, export laporan
+- **Pain point saat ini:** Data tersebar di spreadsheet berbeda, sering ada data duplikat atau tidak lengkap
 
----
-
-## 3. Fitur & Ruang Lingkup
-
-### 3.1 Halaman Landing & Pendaftaran (Publik)
-
-#### A. Landing Page
-- **Carousel informasi kampus** — slideshow gambar/banner berisi informasi tentang kampus (dikelola dari admin).
-- **Jadwal PMB** — menampilkan tahapan & timeline pendaftaran.
-  - Fitur lihat detail jadwal.
-  - Fitur unduh brosur/dokumen jadwal (file PDF).
-- **Informasi program studi & jalur pendaftaran**.
-
-#### B. Form Pendaftaran (Alur Utama)
-Alur pendaftaran utama:
-1. **Isi form data pendaftar:**
-   - Nama lengkap
-   - NIK
-   - No. HP (WhatsApp)
-   - Email
-   - Jenis kelamin
-   - Program studi tujuan
-   - **Jalur pendaftaran** — ditentukan **otomatis dari jadwal PMB yang sedang dibuka** (tidak dipilih manual oleh pendaftar).
-2. **Pembayaran** — jika jalur yang dibuka memiliki biaya pendaftaran, lanjut ke pembayaran Midtrans Snap. Jika gratis, pendaftaran langsung diproses.
-
-Aturan:
-- **Satu NIK hanya boleh memiliki satu pendaftaran (satu jalur).** Sistem memvalidasi keunikan NIK saat pendaftaran; jika NIK sudah terdaftar, pendaftaran ditolak.
-- Jalur (beserta biaya & persyaratan dokumen) mengikuti **jadwal PMB yang aktif/dibuka** saat itu.
-- Jika berbayar → diarahkan ke **pembayaran Midtrans Snap**.
-- Jika gratis → langsung diproses sebagai pendaftaran terdaftar.
-
-#### C. Pembayaran (Midtrans Snap)
-- Membuat transaksi Snap untuk biaya pendaftaran jalur berbayar.
-- Menangani callback/webhook untuk update status pembayaran (pending, settlement, expire, cancel, deny).
-- Menampilkan detail pembayaran ke peserta.
-
-#### D. Notifikasi Pendaftaran (Fonnte)
-Setelah pendaftaran berhasil (gratis) atau pembayaran berhasil (berbayar), sistem otomatis mengirim **WhatsApp** ke nomor peserta berisi:
-- Nomor pendaftaran.
-- Password untuk login ke sistem.
-
-#### E. Area Peserta (Setelah Login)
-- Login menggunakan **nomor pendaftaran + password**.
-- Melihat **status pendaftaran** (terdaftar, menunggu pembayaran, lunas, sedang diverifikasi, lolos, ditolak).
-- **Mengubah data** pendaftaran (selama belum dikunci/diverifikasi).
-- **Mengunggah dokumen pendukung** ke Supabase Storage sesuai persyaratan dokumen jalur yang dipilih (lihat bagian 3.3). Maksimal **10 MB** per file, format **PDF atau image** sesuai jenis yang ditentukan tiap persyaratan.
-- Melihat status & detail pembayaran.
-- **Mengunduh kartu peserta pendaftaran** (PDF) berisi nomor pendaftaran, nama, NIK, prodi tujuan, jalur, dan foto.
-
-### 3.3 Persyaratan Dokumen Dinamis (per Jalur)
-
-Setiap **jalur pendaftaran** memiliki daftar persyaratan dokumen yang dapat dikonfigurasi admin. Tiap persyaratan menentukan:
-- **Nama dokumen** (mis. Ijazah Terakhir, Pas Foto, Sertifikat).
-- **Wajib / Opsional** — apakah dokumen harus diunggah agar pendaftaran lengkap.
-- **Jenis file yang diperbolehkan** — mis. `pdf`, `png`, `jpg/jpeg` (image), atau kombinasi.
-
-Aturan unggah:
-- **Ukuran maksimal 10 MB per file.**
-- Hanya menerima **PDF atau image** sesuai jenis file yang ditetapkan pada persyaratan.
-- Dokumen wajib harus lengkap sebelum pendaftaran dianggap siap diverifikasi.
-
-**Persyaratan default** (saat jalur dibuat, dapat diubah admin):
-| Dokumen | Jenis File | Status |
-|---|---|---|
-| Ijazah Terakhir | PDF | Wajib |
-| Pas Foto | PNG | Wajib |
-| Sertifikat | PDF | Opsional |
-
-### 3.2 Halaman Admin
-
-- **Dashboard** — grafik & ringkasan (summary) pendaftar dari semua jalur (jumlah pendaftar, status, tren per periode, distribusi prodi).
-- **Data Pendaftar** — daftar lengkap pendaftar semua jalur, filter & pencarian, lihat detail, ekspor.
-- **Data Pembayaran** — daftar pembayaran semua jalur:
-  - **Validasi manual** dan **validasi otomatis** (via webhook Midtrans).
-  - Detail pembayaran per transaksi.
-- **Manajemen Carousel** — CRUD banner/slide landing page.
-- **Manajemen Program Studi** — CRUD program studi.
-- **Manajemen Jalur Pendaftaran** — CRUD jalur (termasuk pengaturan gratis/berbayar & nominal) dan **konfigurasi persyaratan dokumen dinamis** per jalur (nama dokumen, wajib/opsional, jenis file). Persyaratan default otomatis dibuat: Ijazah Terakhir (PDF, wajib), Pas Foto (PNG, wajib), Sertifikat (PDF, opsional).
-- **Manajemen User** — kelola peserta & admin.
-- **Notifikasi WhatsApp** — kirim notifikasi manual ke peserta via Fonnte.
-- **Manajemen Status Pendaftaran**:
-  - Mengubah status / meloloskan / menolak pendaftaran.
-  - Perubahan status **otomatis mengirim notifikasi WhatsApp** ke peserta via Fonnte.
-- **Unduh Kartu Peserta** — admin dapat mengunduh kartu peserta (PDF) milik pendaftar mana pun.
+### 2.3 Operator / Panitia Lapangan *(Fase 3)*
+- **Siapa:** Panitia yang bertugas di lapangan saat hari tes berlangsung
+- **Kebutuhan utama:** Verifikasi kehadiran peserta dengan cepat berdasarkan nomor pendaftaran
+- **Pain point saat ini:** Absensi masih manual dengan kertas, rawan salah catat
 
 ---
 
-## 4. Model Data (Ringkasan)
+## 3. Fitur per Persona
 
-| Entitas | Field Utama |
-|---|---|
-| `users` | id, role (admin/peserta), nama, email, no_wa, password, nomor_pendaftaran |
-| `pendaftar` | id, user_id, nik (**unique**), data_diri (informasi dasar), prodi_pilihan_1, prodi_pilihan_2, jalur_id, status, created_at |
-| `program_studi` | id, nama, jenjang, deskripsi, kuota, is_active |
-| `jalur_pendaftaran` | id, nama, deskripsi, is_berbayar, biaya, periode_mulai, periode_selesai, is_active |
-| `persyaratan_dokumen` | id, jalur_id, nama_dokumen, jenis_file (pdf/png/jpg/...), is_wajib, urutan |
-| `pembayaran` | id, pendaftar_id, order_id, jumlah, status, metode, snap_token, validasi_manual, paid_at |
-| `dokumen` | id, pendaftar_id, persyaratan_id, nama, file_url, ukuran, mime_type, status_verifikasi |
-| `carousel` | id, judul, gambar_url, link, urutan, is_active |
-| `jadwal_pmb` | id, judul, jalur_id, tanggal_mulai, tanggal_selesai, deskripsi, brosur_url, is_active |
-| `notifikasi_log` | id, pendaftar_id, pesan, status_kirim, created_at |
+### Calon Mahasiswa
+| # | Fitur | Fase |
+|---|-------|------|
+| CM-1 | Mengisi form pendaftaran online | 1 |
+| CM-2 | Mendapatkan nomor pendaftaran otomatis | 1 |
+| CM-3 | Mengecek status pendaftaran via nomor pendaftaran | 1 |
+| CM-4 | Melihat jadwal tes seleksi | 2 |
+| CM-5 | Melakukan daftar ulang (heregistrasi) setelah dinyatakan lolos | 3 |
 
----
-
-## 5. Status Pendaftaran (State)
-
-```
-Terdaftar → Menunggu Pembayaran → Lunas → Verifikasi Dokumen → Lolos / Ditolak
-```
-- Jalur gratis melewati state "Menunggu Pembayaran" & "Lunas".
-- Setiap perubahan ke status final (Lolos/Ditolak) memicu notifikasi WA otomatis.
+### Admin PMB
+| # | Fitur | Fase |
+|---|-------|------|
+| AD-1 | Login ke panel admin | 1 |
+| AD-2 | Melihat daftar semua pendaftar | 1 |
+| AD-3 | Mengubah status pendaftar (Menunggu / Lolos / Tidak Lolos) | 1 |
+| AD-4 | Filter dan cari data pendaftar | 1 |
+| AD-5 | Melihat statistik pendaftaran per prodi dan jalur | 2 |
+| AD-6 | Export data pendaftar ke CSV | 2 |
+| AD-7 | Membuat dan mengelola jadwal tes | 2 |
+| AD-8 | Mengirim notifikasi status ke pendaftar | 3 |
 
 ---
 
-## 6. Roadmap (3 Fase)
+## 4. Fase Pengembangan
 
-### Fase 1 — Halaman Landing & Pendaftaran (Frontend)
-**Tujuan:** Membangun seluruh tampilan publik & alur peserta menggunakan React + shadcn/ui (data mock/dummy lebih dulu bila API belum siap).
+### Fase 1 — Core Prototype (MVP)
+**Scope:** Alur pendaftaran dasar end-to-end, data di localStorage
+**Target:** Bisa didemonstrasikan sebagai prototype dalam 1 hari kerja
+**Done when:**
+- Calon mahasiswa bisa mendaftar dan mendapat nomor pendaftaran
+- Admin bisa login, lihat daftar pendaftar, dan ubah status
+- Cek status berfungsi dari sisi publik
 
-- [ ] Setup project React + shadcn/ui + Tailwind + routing.
-- [ ] Landing page: carousel, info kampus.
-- [ ] Komponen jadwal PMB: list, detail, tombol unduh brosur.
-- [ ] Form pendaftaran multi-step (informasi dasar, prodi, jalur).
-- [ ] Halaman pemilihan jalur (gratis/berbayar) + ringkasan biaya.
-- [ ] Halaman pembayaran (integrasi UI Midtrans Snap).
-- [ ] Halaman login peserta.
-- [ ] Dashboard peserta: status pendaftaran, ubah data, unggah dokumen, detail pembayaran, unduh kartu peserta (PDF).
-- [ ] Responsive & UI/UX modern.
+### Fase 2 — Backend Integration
+**Scope:** Data pindah ke server (Laravel API), fitur statistik dan ekspor
+**Target:** Admin panel terhubung ke backend, data persisten
+**Done when:**
+- Admin dashboard konsumsi data dari Laravel API
+- Export CSV berfungsi
+- Statistik per prodi dan jalur akurat
 
-### Fase 2 — Halaman Admin (Frontend)
-**Tujuan:** Membangun seluruh antarmuka admin.
-
-- [ ] Layout admin (sidebar, auth guard).
-- [ ] Dashboard: grafik & summary pendaftar.
-- [ ] Tabel data pendaftar (filter, search, detail, ekspor).
-- [ ] Tabel data pembayaran (validasi manual & detail).
-- [ ] CRUD carousel.
-- [ ] CRUD program studi.
-- [ ] CRUD jalur pendaftaran.
-- [ ] CRUD user (peserta & admin).
-- [ ] Form kirim notifikasi WA.
-- [ ] Aksi ubah status / loloskan / tolak pendaftaran.
-- [ ] Unduh kartu peserta (PDF) per pendaftar.
-
-### Fase 3 — Integrasi Backend (Laravel + Supabase)
-**Tujuan:** Membangun API & mengintegrasikan seluruh frontend dengan backend, pembayaran, dan notifikasi.
-
-- [ ] Setup Laravel + koneksi Supabase (PostgreSQL).
-- [ ] Migrasi & model database (sesuai bagian 4).
-- [ ] Autentikasi (Sanctum) untuk peserta & admin.
-- [ ] API pendaftaran, prodi, jalur, jadwal, carousel.
-- [ ] Integrasi Midtrans Snap (create transaksi + webhook callback).
-- [ ] Integrasi Fonnte (kirim WA: nomor pendaftaran & password, perubahan status).
-- [ ] Upload dokumen ke Supabase Storage.
-- [ ] API dashboard & summary admin.
-- [ ] Validasi pembayaran manual & otomatis.
-- [ ] Sambungkan seluruh frontend Fase 1 & 2 ke API.
+### Fase 3 — Full System
+**Scope:** Autentikasi proper, fitur heregistrasi, notifikasi, operator tools
+**Target:** Siap diuji oleh pengguna nyata (UAT)
+**Done when:**
+- Semua fitur dari tabel di atas tersedia
+- Autentikasi menggunakan Laravel Sanctum
+- Data tersimpan di PostgreSQL
 
 ---
 
-## 7. Integrasi Eksternal
+## 5. Acceptance Criteria (Fase 1)
 
-### 7.1 Midtrans Snap
-- Membuat Snap token di backend untuk biaya jalur berbayar.
-- Webhook menerima notifikasi status & memperbarui tabel `pembayaran`.
-- Status sukses memicu notifikasi WA + update status pendaftaran.
-
-### 7.2 Fonnte (WhatsApp)
-- Endpoint: `https://docs.fonnte.com/api-send-message/`.
-- Pemicu otomatis:
-  1. Pendaftaran berhasil → kirim nomor pendaftaran & password.
-  2. Perubahan status (lolos/ditolak) → kirim pemberitahuan.
-- Pemicu manual: admin mengirim notifikasi dari panel.
-- Semua pengiriman dicatat di `notifikasi_log`.
+| Fitur | Kriteria Diterima |
+|-------|-------------------|
+| Form pendaftaran | Semua field tervalidasi, submit gagal jika ada field kosong atau format salah |
+| Nomor pendaftaran | Format PMB-2025-XXXX, unik setiap submit |
+| Cek status | Input nomor pendaftaran → tampilkan nama, prodi, jalur, dan status dengan benar |
+| Login admin | Tolak kredensial salah, simpan sesi di sessionStorage |
+| Tabel pendaftar | Menampilkan semua data dari localStorage, filter real-time berfungsi |
+| Ubah status | Perubahan status langsung tampil di badge tanpa reload halaman |
 
 ---
 
-## 8. Persyaratan Non-Fungsional
-- **Keamanan:** password di-hash, otorisasi berbasis role, validasi input, verifikasi webhook (signature Midtrans).
-- **Responsif:** mendukung desktop & mobile.
-- **Performa:** pagination pada tabel data besar.
-- **Reliabilitas:** retry/log untuk kegagalan kirim WA & webhook pembayaran.
+## 6. Non-Functional Requirements
+
+- **Responsivitas:** Semua halaman harus dapat digunakan di layar mobile (min. 375px)
+- **Performa:** Halaman utama harus selesai render dalam < 2 detik
+- **Aksesibilitas:** Semua input harus punya label yang jelas, tombol harus bisa diketuk di mobile (min. 44px height)
+- **Konsistensi:** Warna, font, dan komponen harus konsisten di seluruh halaman
 
 ---
 
-## 9. Asumsi & Keputusan
-- Versi Laravel mengikuti versi LTS/stabil terbaru yang tersedia.
-- **Satu NIK = satu pendaftaran (satu jalur).** NIK divalidasi unik saat mendaftar.
-- **Unggah dokumen:** maksimal 10 MB per file, format PDF atau image sesuai jenis pada tiap persyaratan.
-- **Persyaratan dokumen bersifat dinamis per jalur** (wajib/opsional, jenis file). Default: Ijazah Terakhir (PDF, wajib), Pas Foto (PNG, wajib), Sertifikat (PDF, opsional).
-- **Jalur pendaftaran ditentukan otomatis dari jadwal PMB yang aktif/dibuka**, bukan dipilih manual oleh pendaftar.
-- **Kartu peserta pendaftaran (PDF) dapat diunduh oleh peserta maupun admin.**
+## 7. Out of Scope (Prototype Ini)
 
-### Pertanyaan Terbuka
-- _(Belum ada — semua poin utama sudah ditentukan.)_
+- Integrasi dengan SIAKAD atau sistem kampus yang sudah ada
+- Pembayaran online (UKT, biaya pendaftaran)
+- Verifikasi dokumen oleh panitia secara digital
+- Mobile app (iOS/Android)
+- Multi-perguruan-tinggi (hanya untuk 1 kampus)

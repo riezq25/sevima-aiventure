@@ -1,291 +1,196 @@
-# Development Plan — Sistem PMB Kampus
+# Development Plan — Sistem Penerimaan Mahasiswa Baru
 
-| Field | Keterangan |
-|---|---|
-| Dokumen | Development Plan (Devplan) |
-| Versi | 1.0 |
-| Tanggal | 13 Juni 2026 |
-| Referensi | `prd.md` |
-
-Dokumen ini menjelaskan **alur pengembangan**, **technology stack**, dan **struktur proyek** untuk membangun Sistem PMB Kampus. Pengembangan dibagi 3 fase (FE landing/pendaftaran → FE admin → integrasi BE) sesuai PRD.
+> Diturunkan dari `prd.md`. Fokus pada 4 alur inti:
+> **Pendaftaran → Pelengkapan Pendaftaran → Penilaian → Pengumuman.**
+> Stack: React 18 + Tailwind (frontend) · Laravel 12 + Sanctum (backend) · SQLite (dev) / PostgreSQL (prod).
 
 ---
 
-## 1. Technology Stack
+## 0. Ringkasan Alur End-to-End
 
-### 1.1 Frontend
-| Komponen | Pilihan | Catatan |
-|---|---|---|
-| Framework | React 18 + Vite | SPA, build cepat |
-| Bahasa | TypeScript | Type-safe |
-| UI Library | shadcn/ui | Komponen di-generate ke dalam repo |
-| Styling | Tailwind CSS | Utility-first |
-| Routing | React Router | Routing client-side |
-| Data Fetching | TanStack Query (React Query) | Cache & state server |
-| HTTP Client | Axios | Interceptor untuk token |
-| Form & Validasi | React Hook Form + Zod | Validasi schema |
-| State (UI) | Zustand | State global ringan (auth, dll) |
-| Charts | Recharts | Grafik dashboard admin |
-| Tabel | TanStack Table | Tabel data admin (sort, filter, paginate) |
-| Pembayaran | Midtrans Snap.js | Embed Snap di sisi klien |
-| PDF Kartu Peserta | `@react-pdf/renderer` atau render server-side | Lihat bagian 5.3 |
+```
+[Calon Mahasiswa]                         [Admin / Panitia]
+       │                                          │
+       ▼                                          │
+ 1. PENDAFTARAN  ──────────────────────────────►  │
+   (isi biodata, dapat nomor pendaftaran)         │
+       │                                          │
+       ▼                                          │
+ 2. PELENGKAPAN PENDAFTARAN ─────────────────────►│  verifikasi berkas
+   (upload dokumen, lengkapi data)                │
+       │                                          ▼
+       │                                  3. PENILAIAN
+       │                                  (input skor, hitung, ranking)
+       │                                          │
+       ▼                                          ▼
+ 4. PENGUMUMAN ◄───────────────────────── publish hasil seleksi
+   (lihat hasil: Lolos / Tidak Lolos)
+```
 
-### 1.2 Backend
-| Komponen | Pilihan | Catatan |
-|---|---|---|
-| Framework | Laravel (versi stabil terbaru) | REST API |
-| Bahasa | PHP 8.2+ | |
-| Auth | Laravel Sanctum | Token-based untuk peserta & admin |
-| Database | Supabase (PostgreSQL) | Koneksi via driver `pgsql` |
-| Storage | Supabase Storage | Dokumen pendukung & aset |
-| Pembayaran | Midtrans PHP SDK | Create transaksi + handle webhook |
-| WhatsApp | Fonnte API (HTTP) | Via Laravel HTTP Client |
-| PDF (opsional) | `barryvdh/laravel-dompdf` | Generate kartu peserta server-side |
-| Queue | Laravel Queue (database/redis) | Kirim WA & proses async |
-
-### 1.3 Tooling & Infra
-| Komponen | Pilihan |
-|---|---|
-| Package Manager FE | pnpm / npm |
-| Linting & Format | ESLint + Prettier (FE), Laravel Pint (BE) |
-| Env Management | `.env` (FE: `VITE_*`, BE: Laravel env) |
-| Version Control | Git (mono-repo: folder `frontend` & `backend`) |
-| API Testing | Postman / Thunder Client |
-
-> Catatan versi: ikuti versi stabil terbaru saat implementasi. Gunakan Context7/dokumentasi resmi untuk verifikasi sintaks API terkini sebelum coding.
+Status pendaftar mengalir lewat tahapan ini:
+`Draft → Menunggu Verifikasi → Terverifikasi → Dinilai → Lolos / Tidak Lolos → (Heregistrasi)`
 
 ---
 
-## 2. Arsitektur Sistem
+## 1. Modul: PENDAFTARAN
 
-```
-┌─────────────────┐        REST API (JSON)        ┌──────────────────┐
-│   Frontend      │  ───────────────────────────► │   Backend         │
-│  React + shadcn │  ◄─────────────────────────── │   Laravel API     │
-└─────────────────┘        Sanctum token          └────────┬─────────┘
-        │                                                   │
-        │ Snap.js                                           │ pgsql
-        ▼                                                   ▼
-┌─────────────────┐                               ┌──────────────────┐
-│  Midtrans Snap  │ ◄── webhook ──────────────────│  Supabase        │
-└─────────────────┘                               │  (PostgreSQL +   │
-┌─────────────────┐                               │   Storage)       │
-│  Fonnte (WA)    │ ◄── HTTP (server-side) ────── │                  │
-└─────────────────┘                               └──────────────────┘
-```
+**Referensi PRD:** CM-1, CM-2, AD-2, AD-4 · **Status:** sebagian sudah ada, perlu penyesuaian.
 
-- **Frontend** murni mengonsumsi REST API; tidak mengakses Supabase langsung (semua lewat Laravel) untuk keamanan & konsistensi.
-- **Webhook** Midtrans dan **pengiriman WA** ditangani backend.
-- **Upload file** dilakukan via endpoint backend → Supabase Storage (validasi tipe & ukuran di server).
+### Tujuan
+Calon mahasiswa mengisi biodata awal dan langsung mendapat nomor pendaftaran unik.
 
----
+### Backend (Laravel)
+- [x] Migration `pendaftars` (biodata dasar) — **sudah ada**
+- [x] `POST /api/pendaftar` (store) + generate nomor `PMB-2025-XXXX` — **sudah ada**
+- [x] `StorePendaftarRequest` validasi field wajib — **sudah ada**
+- [ ] Tambah kolom `tahap` (enum alur) dan `tanggal_lahir`, `jenis_kelamin`, `alamat` ke migration
+- [ ] Set status awal `Draft` (alih-alih langsung `Menunggu`) agar bisa dibedakan dari yang sudah lengkap
 
-## 3. Struktur Proyek (Mono-repo)
+### Frontend (React)
+- [x] `FormPendaftaran.jsx` — biodata + submit — **sudah ada**
+- [x] Validasi field kosong / format salah — **sudah ada**
+- [ ] Setelah submit, arahkan ke halaman pelengkapan (bukan hanya tampilkan nomor)
+- [ ] Simpan nomor pendaftaran ke `sessionStorage` untuk lanjut ke tahap berikutnya
 
-```
-pmb-siakad/
-├── prd.md
-├── devplan.md
-├── frontend/                      # React + Vite + shadcn/ui
-│   ├── public/
-│   ├── src/
-│   │   ├── main.tsx
-│   │   ├── App.tsx
-│   │   ├── routes/                # Definisi route & layout
-│   │   │   ├── index.tsx
-│   │   │   └── ProtectedRoute.tsx
-│   │   ├── layouts/
-│   │   │   ├── PublicLayout.tsx
-│   │   │   ├── PesertaLayout.tsx
-│   │   │   └── AdminLayout.tsx
-│   │   ├── pages/
-│   │   │   ├── public/            # Landing, jadwal, form daftar, login
-│   │   │   │   ├── LandingPage.tsx
-│   │   │   │   ├── JadwalDetailPage.tsx
-│   │   │   │   ├── PendaftaranPage.tsx
-│   │   │   │   ├── PembayaranPage.tsx
-│   │   │   │   └── LoginPage.tsx
-│   │   │   ├── peserta/           # Dashboard peserta
-│   │   │   │   ├── StatusPage.tsx
-│   │   │   │   ├── EditDataPage.tsx
-│   │   │   │   ├── DokumenPage.tsx
-│   │   │   │   └── KartuPesertaPage.tsx
-│   │   │   └── admin/             # Panel admin
-│   │   │       ├── DashboardPage.tsx
-│   │   │       ├── PendaftarPage.tsx
-│   │   │       ├── PembayaranPage.tsx
-│   │   │       ├── CarouselPage.tsx
-│   │   │       ├── ProdiPage.tsx
-│   │   │       ├── JalurPage.tsx
-│   │   │       ├── JadwalPage.tsx
-│   │   │       ├── UserPage.tsx
-│   │   │       └── NotifikasiPage.tsx
-│   │   ├── components/
-│   │   │   ├── ui/                # Komponen shadcn (generated)
-│   │   │   ├── common/            # Komponen reusable (DataTable, dll)
-│   │   │   └── features/          # Komponen per fitur (Carousel, dll)
-│   │   ├── lib/
-│   │   │   ├── api.ts             # Instance Axios + interceptor
-│   │   │   ├── queryClient.ts
-│   │   │   └── utils.ts
-│   │   ├── hooks/                 # Custom hooks (useAuth, useJadwal, ...)
-│   │   ├── services/             # API service per domain
-│   │   ├── store/                # Zustand stores
-│   │   ├── types/                # Tipe TypeScript (DTO)
-│   │   └── styles/
-│   ├── .env                      # VITE_API_URL, VITE_MIDTRANS_CLIENT_KEY
-│   ├── components.json           # Konfigurasi shadcn
-│   ├── tailwind.config.ts
-│   ├── vite.config.ts
-│   └── package.json
-│
-└── backend/                      # Laravel API
-    ├── app/
-    │   ├── Http/
-    │   │   ├── Controllers/Api/
-    │   │   │   ├── Auth/
-    │   │   │   ├── PendaftaranController.php
-    │   │   │   ├── PembayaranController.php
-    │   │   │   ├── DokumenController.php
-    │   │   │   ├── KartuPesertaController.php
-    │   │   │   └── Admin/        # Controller area admin
-    │   │   ├── Requests/         # Form Request (validasi)
-    │   │   ├── Resources/        # API Resources (transform JSON)
-    │   │   └── Middleware/
-    │   ├── Models/               # User, Pendaftar, Jalur, Jadwal, dll
-    │   ├── Services/             # MidtransService, FonnteService, dll
-    │   └── Jobs/                 # KirimWhatsappJob, dll
-    ├── config/                   # midtrans.php, fonnte.php, services.php
-    ├── database/
-    │   ├── migrations/
-    │   ├── seeders/
-    │   └── factories/
-    ├── routes/
-    │   └── api.php
-    ├── storage/
-    ├── .env                      # DB Supabase, Midtrans, Fonnte keys
-    └── composer.json
-```
+### Acceptance Criteria
+- Form gagal submit bila ada field wajib kosong / format email/HP salah
+- Nomor pendaftaran berformat `PMB-2025-XXXX` dan unik
+- Setelah berhasil, user diarahkan ke langkah pelengkapan dengan nomor terbawa
 
 ---
 
-## 4. Alur Pengembangan (Development Flow)
+## 2. Modul: PELENGKAPAN PENDAFTARAN
 
-Strategi: bangun **frontend lebih dulu dengan data mock**, lalu sambungkan ke backend di Fase 3. Ini memungkinkan validasi UX lebih awal.
+**Referensi PRD:** turunan CM-1 (perluasan) · **Status:** BARU.
 
-### Fase 0 — Persiapan
-1. Inisialisasi mono-repo & Git.
-2. Setup `frontend/` (Vite + React + TS + Tailwind + shadcn/ui).
-3. Siapkan struktur folder, routing dasar, dan layout (public/peserta/admin).
-4. Buat mock API layer (data dummy) agar UI bisa dikembangkan tanpa backend.
+### Tujuan
+Pendaftar melengkapi dokumen & data tambahan; admin memverifikasi kelengkapan sebelum penilaian.
 
-### Fase 1 — Landing & Pendaftaran (Frontend)
-1. Landing page: carousel, info kampus, daftar prodi.
-2. Komponen jadwal PMB: list, halaman detail, tombol unduh brosur.
-3. Form pendaftaran (nama, NIK, no HP, email, jenis kelamin, prodi tujuan); jalur otomatis dari jadwal aktif.
-4. Validasi form (React Hook Form + Zod), termasuk cek duplikasi NIK (mock).
-5. Halaman pembayaran (UI Snap, kondisional jika berbayar).
-6. Halaman login peserta (nomor pendaftaran + password).
-7. Dashboard peserta: status, ubah data, unggah dokumen (mengikuti persyaratan dinamis), detail pembayaran, unduh kartu peserta.
-8. Polish responsif & UX.
+### Backend (Laravel)
+- [ ] Migration `dokumen_pendaftar` — relasi `belongsTo` pendaftar
+  - kolom: `pendaftar_id`, `jenis_dokumen` (ijazah, foto, rapor, KTP), `path`, `status_verifikasi` (Menunggu/Diterima/Ditolak), `catatan`
+- [ ] Konfigurasi `storage` (disk `public`) + `php artisan storage:link`
+- [ ] `POST /api/pendaftar/{nomor}/dokumen` (publik, multipart) — upload, validasi `mimes` & `max:2048`
+- [ ] `GET /api/pendaftar/{nomor}/dokumen` — daftar dokumen pendaftar
+- [ ] `PATCH /api/dokumen/{id}/verifikasi` (admin/Sanctum) — terima/tolak + catatan
+- [ ] Saat semua dokumen wajib `Diterima` → ubah status pendaftar jadi `Terverifikasi`
+- [ ] `UploadDokumenRequest` untuk validasi file
 
-### Fase 2 — Admin (Frontend)
-1. Layout admin + auth guard + sidebar.
-2. Dashboard: grafik (Recharts) & kartu ringkasan.
-3. DataTable reusable: pendaftar & pembayaran (filter, search, paginate, detail).
-4. CRUD: carousel, prodi, jalur (+ konfigurasi persyaratan dokumen), jadwal, user.
-5. Aksi status pendaftaran (loloskan/tolak) + form kirim notifikasi WA.
-6. Unduh kartu peserta per pendaftar.
+### Frontend (React)
+- [ ] `PelengkapanPendaftaran.jsx` — daftar slot dokumen wajib + komponen upload (drag/drop atau file input)
+- [ ] Indikator progres kelengkapan (mis. "3 dari 4 dokumen terunggah")
+- [ ] Status per dokumen (Menunggu / Diterima / Ditolak + catatan admin)
+- [ ] Di admin: panel verifikasi dokumen per pendaftar (preview, tombol Terima/Tolak)
+- [ ] Tambah method `dokumenApi` di `src/utils/api.js`
 
-### Fase 3 — Integrasi Backend
-1. Setup Laravel + koneksi Supabase (PostgreSQL).
-2. Migrasi, model, relasi, & seeder (sesuai model data PRD bagian 4).
-3. Auth Sanctum (peserta & admin) + middleware role.
-4. Endpoint publik: carousel, jadwal, prodi, pendaftaran, pembayaran.
-5. Integrasi Midtrans (create Snap token + webhook) → update status pembayaran.
-6. Integrasi Fonnte via Service + Queue (nomor pendaftaran & password, perubahan status).
-7. Upload dokumen → Supabase Storage (validasi 10MB, tipe sesuai persyaratan).
-8. Endpoint admin (dashboard summary, CRUD, ubah status, kirim WA).
-9. Generate kartu peserta (PDF).
-10. Ganti mock layer di frontend dengan API nyata + uji end-to-end.
+### Acceptance Criteria
+- Hanya file dengan tipe & ukuran valid yang bisa diunggah
+- Admin bisa terima/tolak tiap dokumen dengan catatan
+- Status pendaftar otomatis naik ke `Terverifikasi` saat dokumen wajib lengkap & diterima
 
 ---
 
-## 5. Catatan Teknis Penting
+## 3. Modul: PENILAIAN
 
-### 5.1 Autentikasi
-- Sanctum token disimpan aman di frontend; Axios interceptor menyisipkan `Authorization: Bearer`.
-- Middleware role memisahkan akses `peserta` vs `admin`.
+**Referensi PRD:** turunan AD-3 (perluasan seleksi) · **Status:** BARU.
 
-### 5.2 Unggah Dokumen
-- Validasi di server: ukuran ≤ 10 MB dan MIME sesuai `persyaratan_dokumen.jenis_file`.
-- Simpan ke Supabase Storage; simpan metadata (`file_url`, `ukuran`, `mime_type`) di tabel `dokumen`.
-- Cek kelengkapan dokumen wajib sebelum status "Verifikasi Dokumen".
+### Tujuan
+Admin/penilai memasukkan skor per pendaftar (terverifikasi), sistem menghitung total dan menyusun ranking sebagai dasar kelulusan.
 
-### 5.3 Kartu Peserta (PDF)
-- **Opsi A (server-side, direkomendasikan):** Laravel + DomPDF, endpoint `GET /kartu-peserta/{id}` mengembalikan PDF. Otorisasi: peserta hanya kartunya sendiri, admin semua.
-- **Opsi B (client-side):** `@react-pdf/renderer` di frontend.
+### Backend (Laravel)
+- [ ] Migration `penilaians` — relasi `belongsTo` pendaftar
+  - kolom: `pendaftar_id`, `nilai_akademik`, `nilai_tes`, `nilai_wawancara` (nullable), `total_nilai`, `dinilai_oleh`, `catatan`
+- [ ] Hitung `total_nilai` (mis. bobot terkonfigurasi) saat simpan
+- [ ] `GET /api/penilaian` (admin) — daftar pendaftar terverifikasi + skornya, urut by `total_nilai`
+- [ ] `POST /api/pendaftar/{id}/penilaian` (admin) — input/update skor
+- [ ] Setelah dinilai → status pendaftar jadi `Dinilai`
+- [ ] (Opsional) endpoint ranking per prodi dengan kuota
 
-### 5.4 Webhook Midtrans
-- Endpoint publik tanpa Sanctum, diverifikasi via **signature key**.
-- Update `pembayaran.status`; jika sukses → trigger WA & lanjut status pendaftaran.
+### Frontend (React)
+- [ ] `Penilaian.jsx` (admin) — tabel pendaftar terverifikasi, input skor inline/modal
+- [ ] Kolom total nilai terhitung otomatis + ranking
+- [ ] Filter per prodi/jalur, urut by nilai
+- [ ] Hanya pendaftar berstatus `Terverifikasi`/`Dinilai` yang bisa dinilai
+- [ ] Tambah method `penilaianApi` di `src/utils/api.js`
 
-### 5.5 Notifikasi WA (Fonnte)
-- Dibungkus `FonnteService` dan dijalankan via Queue/Job agar tidak memblok request.
-- Setiap pengiriman dicatat di `notifikasi_log` (status kirim, retry bila gagal).
-
-### 5.6 Environment Variables
-**Frontend (`.env`)**
-```
-VITE_API_URL=
-VITE_MIDTRANS_CLIENT_KEY=
-```
-**Backend (`.env`)**
-```
-DB_CONNECTION=pgsql
-DB_HOST=            # Supabase host
-DB_PORT=5432
-DB_DATABASE=
-DB_USERNAME=
-DB_PASSWORD=
-SUPABASE_URL=
-SUPABASE_STORAGE_BUCKET=
-MIDTRANS_SERVER_KEY=
-MIDTRANS_CLIENT_KEY=
-MIDTRANS_IS_PRODUCTION=false
-FONNTE_TOKEN=
-```
+### Acceptance Criteria
+- Skor hanya bisa diinput untuk pendaftar `Terverifikasi`
+- Total nilai konsisten dengan rumus bobot dan tampil real-time
+- Ranking akurat dan terurut menurun
 
 ---
 
-## 6. Daftar Endpoint API (Rancangan Awal)
+## 4. Modul: PENGUMUMAN
 
-| Method | Endpoint | Akses | Fungsi |
-|---|---|---|---|
-| GET | `/api/carousel` | Publik | List carousel aktif |
-| GET | `/api/jadwal` | Publik | List jadwal PMB |
-| GET | `/api/jadwal/{id}` | Publik | Detail jadwal + brosur |
-| GET | `/api/prodi` | Publik | List program studi |
-| GET | `/api/jalur/aktif` | Publik | Jalur dari jadwal yang dibuka |
-| POST | `/api/pendaftaran` | Publik | Submit pendaftaran (validasi NIK unik) |
-| POST | `/api/pembayaran/snap` | Publik/Peserta | Buat Snap token |
-| POST | `/api/pembayaran/webhook` | Midtrans | Webhook status pembayaran |
-| POST | `/api/auth/login` | Publik | Login peserta/admin |
-| GET | `/api/peserta/status` | Peserta | Status pendaftaran |
-| PUT | `/api/peserta/data` | Peserta | Ubah data |
-| POST | `/api/peserta/dokumen` | Peserta | Unggah dokumen |
-| GET | `/api/kartu-peserta/{id}` | Peserta/Admin | Unduh kartu (PDF) |
-| GET | `/api/admin/dashboard` | Admin | Summary & grafik |
-| GET | `/api/admin/pendaftar` | Admin | List pendaftar |
-| PUT | `/api/admin/pendaftar/{id}/status` | Admin | Ubah/loloskan/tolak |
-| GET | `/api/admin/pembayaran` | Admin | List & validasi |
-| POST | `/api/admin/notifikasi` | Admin | Kirim WA manual |
-| CRUD | `/api/admin/{carousel\|prodi\|jalur\|jadwal\|user}` | Admin | Data master |
+**Referensi PRD:** CM-3, AD-3, AD-8 · **Status:** sebagian (cek status) ada, publish & notifikasi BARU.
 
-> Daftar di atas adalah rancangan awal dan dapat disesuaikan saat implementasi Fase 3.
+### Tujuan
+Admin mempublikasikan hasil seleksi; pendaftar melihat hasil resmi (Lolos / Tidak Lolos) lewat nomor pendaftaran.
+
+### Backend (Laravel)
+- [x] `GET /api/pendaftar/{nomor}` (cek status) — **sudah ada**
+- [x] `PATCH /api/pendaftar/{id}/status` — **sudah ada**
+- [ ] Kolom `diumumkan_at` (timestamp) pada `pendaftars` — hasil hanya tampil setelah dipublikasikan
+- [ ] `POST /api/pengumuman/publish` (admin) — tetapkan Lolos/Tidak Lolos berdasarkan ranking/kuota, set `diumumkan_at`
+- [ ] Endpoint cek status hanya tampilkan keputusan kelulusan bila `diumumkan_at` terisi (sebelum itu: "sedang diproses")
+- [ ] (Opsional AD-8) kirim notifikasi (email/log) ke pendaftar saat diumumkan
+
+### Frontend (React)
+- [x] `CekStatus.jsx` — input nomor, tampilkan status — **sudah ada, perlu penyesuaian**
+- [ ] Tampilan hasil resmi: kartu "SELAMAT, Anda LOLOS" / "Mohon maaf, belum lolos" — hanya muncul jika sudah diumumkan
+- [ ] Bila status `Lolos` + sudah diumumkan → tampilkan tombol Heregistrasi (sudah ada alurnya)
+- [ ] Di admin: tombol "Publikasikan Pengumuman" + ringkasan (jumlah lolos/tidak per prodi) sebelum konfirmasi
+- [ ] State sebelum pengumuman: tampilkan "Hasil belum diumumkan"
+
+### Acceptance Criteria
+- Hasil kelulusan tidak bocor sebelum admin menekan publish
+- Setelah publish, cek status menampilkan keputusan yang benar per pendaftar
+- Pendaftar lolos dapat melanjutkan ke heregistrasi
 
 ---
 
-## 7. Definition of Done (per Fase)
-- **Fase 1 & 2:** seluruh halaman tampil benar dengan data mock, responsif, lolos lint, dan navigasi/alur sesuai PRD.
-- **Fase 3:** seluruh endpoint berfungsi, integrasi Midtrans & Fonnte teruji (sandbox), upload & PDF berjalan, dan frontend tersambung penuh ke API (uji end-to-end alur pendaftaran → bayar → notifikasi → status).
+## 5. Perubahan Skema Data (Ringkasan Migration Baru)
+
+| Tabel | Tipe | Kolom Kunci |
+|-------|------|-------------|
+| `pendaftars` (alter) | ubah | `+ tahap`, `+ tanggal_lahir`, `+ jenis_kelamin`, `+ alamat`, `+ diumumkan_at` |
+| `dokumen_pendaftar` | baru | `pendaftar_id`, `jenis_dokumen`, `path`, `status_verifikasi`, `catatan` |
+| `penilaians` | baru | `pendaftar_id`, `nilai_akademik`, `nilai_tes`, `nilai_wawancara`, `total_nilai`, `dinilai_oleh` |
+
+> Catatan: pertahankan konvensi `snake_case` (Laravel default) seperti keputusan teknis di `claude.md`.
+
+---
+
+## 6. Ringkasan Endpoint API
+
+| Method | Endpoint | Auth | Modul | Status |
+|--------|----------|------|-------|--------|
+| POST | `/api/pendaftar` | publik | Pendaftaran | ada |
+| GET | `/api/pendaftar/{nomor}` | publik | Pendaftaran/Pengumuman | ada |
+| POST | `/api/pendaftar/{nomor}/dokumen` | publik | Pelengkapan | baru |
+| GET | `/api/pendaftar/{nomor}/dokumen` | publik | Pelengkapan | baru |
+| PATCH | `/api/dokumen/{id}/verifikasi` | admin | Pelengkapan | baru |
+| GET | `/api/penilaian` | admin | Penilaian | baru |
+| POST | `/api/pendaftar/{id}/penilaian` | admin | Penilaian | baru |
+| POST | `/api/pengumuman/publish` | admin | Pengumuman | baru |
+| PATCH | `/api/pendaftar/{id}/status` | admin | Pengumuman | ada |
+
+---
+
+## 7. Urutan Pengerjaan (Milestone)
+
+1. **M1 — Pendaftaran** (penyesuaian): tambah kolom biodata + status `Draft`, redirect ke pelengkapan.
+2. **M2 — Pelengkapan**: migration dokumen, upload, verifikasi admin, status `Terverifikasi`.
+3. **M3 — Penilaian**: migration penilaian, input skor, ranking, status `Dinilai`.
+4. **M4 — Pengumuman**: publish hasil, gating `diumumkan_at`, tampilan hasil + heregistrasi.
+
+Setiap milestone: backend dulu (migration → controller → route → request), lalu frontend (api.js → komponen), lalu uji alur end-to-end.
+
+---
+
+## 8. Risiko & Catatan
+
+- **File upload (prototype):** simpan di disk lokal `public`; belum perlu cloud storage (out of scope PRD).
+- **Bobot penilaian:** definisikan di config/constanta agar mudah diubah saat demo.
+- **Konsistensi status:** satu sumber kebenaran status di backend; frontend hanya menampilkan.
+- **Out of scope** (sesuai PRD §7): pembayaran online, integrasi SIAKAD, mobile app — jangan dikerjakan.
